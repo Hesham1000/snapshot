@@ -636,11 +636,14 @@ def generate_dockerfile():
         # Copy all template files into the _template subdirectory
         COPY template/ {SANDBOX_TEMPLATE_PATH}/
 
-        # ── theHarvester (GitHub repo — the PyPI package is a stub) ──
+        # ── theHarvester (GitHub repo — the PyPI package is a stub).
+        #    `pip install .` reads pyproject.toml and also registers a
+        #    `theHarvester` console-script entry point on PATH, so no
+        #    manual symlink/chmod is needed (and the old root-level
+        #    theHarvester.py path this used to point to no longer exists —
+        #    the executable now lives inside the nested package dir). ──
         RUN git clone --depth 1 {THEHARVESTER_REPO} /opt/theHarvester && \\
-            pip install --no-cache-dir --break-system-packages /opt/theHarvester 2>&1 | tail -20 && \\
-            ln -sf /opt/theHarvester/theHarvester.py /usr/local/bin/theHarvester && \\
-            chmod +x /usr/local/bin/theHarvester
+            pip install --no-cache-dir --break-system-packages /opt/theHarvester 2>&1 | tail -20
 
         # ── XSStrike (reflected/DOM XSS detection + fuzzing) ──
         RUN git clone --depth 1 {XSSTRIKE_REPO} /opt/XSStrike && \\
