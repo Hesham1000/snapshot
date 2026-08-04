@@ -554,6 +554,13 @@ def generate_dockerfile():
 
         ENV DEBIAN_FRONTEND=noninteractive
 
+        # The base image ships a leftover Yarn apt source (dl.yarnpkg.com) whose
+        # GPG key isn't installed, which makes `apt-get update` hard-fail on
+        # Debian bookworm (unsigned repo = error, not just a warning). Node/Yarn
+        # are already installed in the base image, so the repo isn't needed —
+        # just drop it before touching apt.
+        RUN find /etc/apt/sources.list.d/ -type f -exec grep -l 'yarnpkg' {{}} \\; 2>/dev/null | xargs -r rm -f
+
         # ── System packages: Nmap, Go (for ffuf/gobuster), Ruby (for wpscan),
         #    git, and the headers a few Python C-extensions need ──
         RUN apt-get update && apt-get install -y --no-install-recommends \\
