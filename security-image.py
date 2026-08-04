@@ -183,6 +183,9 @@ GOBUSTER_VERSION = "v3.6.0"
 NUCLEI_VERSION = "v3.3.7"
 SUBFINDER_VERSION = "v2.6.7"
 AMASS_VERSION = "v4.2.0"
+GO_VERSION = "1.23.4"  # Debian bookworm's apt `golang-go` is 1.19 — too old
+                       # to parse the "go 1.21.0"-style three-part version
+                       # directive nuclei/subfinder's go.mod files use.
 
 # External tool versions
 NMAP_MIN = "nmap"  # apt package, version tracks distro
@@ -575,7 +578,6 @@ def generate_dockerfile():
                 libffi-dev \\
                 libpcap-dev \\
                 python3-dev \\
-                golang-go \\
                 ruby-full \\
                 rubygems \\
                 ca-certificates \\
@@ -586,6 +588,15 @@ def generate_dockerfile():
                 john \\
                 smbclient \\
             && rm -rf /var/lib/apt/lists/*
+
+        # ── Modern upstream Go toolchain. Debian bookworm's apt `golang-go`
+        #    is 1.19, which can't parse the "go 1.21.0"-style three-part
+        #    version directive that nuclei/subfinder/amass's go.mod files
+        #    declare — installing straight from go.dev avoids that entirely. ──
+        RUN curl -fsSL https://go.dev/dl/go{GO_VERSION}.linux-amd64.tar.gz -o /tmp/go.tar.gz && \\
+            tar -C /usr/local -xzf /tmp/go.tar.gz && \\
+            rm /tmp/go.tar.gz
+        ENV PATH="/usr/local/go/bin:${{PATH}}"
 
         # ── ffuf (built from source, pinned version) ──
         RUN GOBIN=/usr/local/bin go install github.com/ffuf/ffuf/v2@{FFUF_VERSION}
