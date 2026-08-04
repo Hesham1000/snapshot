@@ -188,6 +188,7 @@ AMASS_VERSION = "v4.2.0"
 NMAP_MIN = "nmap"  # apt package, version tracks distro
 THEHARVESTER_REPO = "https://github.com/laramies/theHarvester.git"
 TESTSSL_REPO = "https://github.com/drwetter/testssl.sh.git"
+NIKTO_REPO = "https://github.com/sullo/nikto.git"
 XSSTRIKE_REPO = "https://github.com/s0md3v/XSStrike.git"
 JWT_TOOL_REPO = "https://github.com/ticarpi/jwt_tool.git"
 
@@ -578,7 +579,8 @@ def generate_dockerfile():
                 ruby-full \\
                 rubygems \\
                 ca-certificates \\
-                nikto \\
+                perl \\
+                libnet-ssleay-perl \\
                 whatweb \\
                 hydra \\
                 john \\
@@ -607,6 +609,13 @@ def generate_dockerfile():
         RUN git clone --depth 1 {TESTSSL_REPO} /opt/testssl.sh && \\
             ln -sf /opt/testssl.sh/testssl.sh /usr/local/bin/testssl.sh && \\
             chmod +x /usr/local/bin/testssl.sh
+
+        # ── nikto (Perl web server scanner — lives in Debian's non-free
+        #    component, which isn't reliably enabled across base images, so
+        #    it's git-cloned instead of apt-installed) ──
+        RUN git clone --depth 1 {NIKTO_REPO} /opt/nikto && \\
+            printf '#!/bin/bash\\nperl /opt/nikto/program/nikto.pl "$@"\\n' > /usr/local/bin/nikto && \\
+            chmod +x /usr/local/bin/nikto
 
         # Place all template files inside _template/ subdirectory.
         # At sandbox init time, this gets renamed to the project name via a
