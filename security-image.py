@@ -638,7 +638,7 @@ def generate_dockerfile():
 
         # ── theHarvester (GitHub repo — the PyPI package is a stub) ──
         RUN git clone --depth 1 {THEHARVESTER_REPO} /opt/theHarvester && \\
-            pip install --no-cache-dir --break-system-packages -r /opt/theHarvester/requirements.txt 2>&1 | tail -20 && \\
+            pip install --no-cache-dir --break-system-packages -r /opt/theHarvester/requirements/base.txt 2>&1 | tail -20 && \\
             ln -sf /opt/theHarvester/theHarvester.py /usr/local/bin/theHarvester && \\
             chmod +x /usr/local/bin/theHarvester
 
