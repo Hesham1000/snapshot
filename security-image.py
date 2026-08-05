@@ -594,10 +594,13 @@ def generate_dockerfile():
         #    sets the login shell to /usr/bin/zsh in /etc/passwd, but if zsh
         #    isn't installed the Daytona SDK's executeCommand fails with
         #    "fork/exec /usr/bin/zsh: no such file or directory". bash is
-        #    always present in Debian — switch to it as a safety net even
-        #    though zsh was installed above (apt cache may be stale). ──
-        RUN chsh -s /bin/bash daytona || true
-        RUN test -f /usr/bin/zsh || ln -sf /bin/bash /usr/bin/zsh
+        #    always present in Debian — switch to it directly via sed
+        #    (chsh may fail if the user doesn't exist at build time). ──
+        RUN sed -i 's|/usr/bin/zsh|/bin/bash|g' /etc/passwd
+        RUN grep daytona /etc/passwd || true
+        # Ensure /usr/bin/zsh exists as a symlink to bash — belt and suspenders
+        RUN ln -sf /bin/bash /usr/bin/zsh 2>/dev/null || true
+        RUN ls -la /usr/bin/zsh /bin/zsh /bin/bash 2>/dev/null || true
 
         # ── Modern upstream Go toolchain. Debian bookworm's apt `golang-go`
         #    is 1.19, which can't parse the "go 1.21.0"-style three-part
