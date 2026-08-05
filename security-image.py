@@ -789,7 +789,7 @@ def main():
 
     image_name = os.environ.get("IMAGE_NAME", f"{docker_user}/syntera-pentest-sandbox").strip()
     image_tag = os.environ.get("IMAGE_TAG", "0.1.0").strip()
-    snapshot_name = os.environ.get("SNAPSHOT_NAME", "syntera-pentest-vcpu2-mem4-disk16").strip()
+    snapshot_name = os.environ.get("SNAPSHOT_NAME", "syntera-pentest-vcpu2-mem4-disk10").strip()
     full_image = f"{image_name}:{image_tag}"
 
     print(f"\n📋 Configuration:")
