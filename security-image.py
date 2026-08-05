@@ -740,7 +740,7 @@ def create_daytona_snapshot(api_key: str, snapshot_name: str, full_image: str):
     """Create a Daytona snapshot using the Python SDK."""
     print(f"\n📦 Creating Daytona snapshot: {snapshot_name}")
     print(f"   Image: {full_image}")
-    print(f"   Resources: 2 vCPU, 4 GiB memory, 16 GiB disk\n")
+    print(f"   Resources: 2 vCPU, 4 GiB memory, 10 GiB disk\n")
 
     try:
         # Install the SDK if not present
@@ -754,7 +754,7 @@ def create_daytona_snapshot(api_key: str, snapshot_name: str, full_image: str):
             CreateSnapshotParams(
                 name=snapshot_name,
                 image=full_image,
-                resources=Resources(cpu=2, memory=4, disk=16),
+                resources=Resources(cpu=2, memory=4, disk=10),
             ),
             on_logs=lambda chunk: print(chunk, end=""),
         )
@@ -767,7 +767,7 @@ def create_daytona_snapshot(api_key: str, snapshot_name: str, full_image: str):
         print(f"   2. Click 'Create Snapshot'")
         print(f"   3. Name: {snapshot_name}")
         print(f"   4. Image: {full_image}")
-        print(f"   5. Resources: 2 vCPU, 4 GiB memory, 16 GiB disk")
+        print(f"   5. Resources: 2 vCPU, 4 GiB memory, 10 GiB disk")
         return False
 
 
@@ -843,7 +843,7 @@ def main():
         print(f"   Create it manually at https://app.daytona.io/dashboard/snapshots")
         print(f"   Name: {snapshot_name}")
         print(f"   Image: {full_image}")
-        print(f"   Resources: 2 vCPU, 4 GiB memory, 16 GiB disk")
+        print(f"   Resources: 2 vCPU, 4 GiB memory, 10 GiB disk")
 
     # Summary
     print("\n\n" + "=" * 60)
