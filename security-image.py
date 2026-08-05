@@ -568,6 +568,7 @@ def generate_dockerfile():
         # ── System packages: Nmap, Go (for ffuf/gobuster), Ruby (for wpscan),
         #    git, and the headers a few Python C-extensions need ──
         RUN apt-get update && apt-get install -y --no-install-recommends \\
+                zsh \\
                 nmap \\
                 whois \\
                 dnsutils \\
