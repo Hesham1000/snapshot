@@ -150,9 +150,9 @@ def generate_dockerfile():
         #    never detects a browser window.
         ENV FIREFOX_PROFILE_DIR={SANDBOX_HOME}/.mozilla/firefox/default
         RUN mkdir -p "$FIREFOX_PROFILE_DIR" && \\
-            printf '[General]\nStartWithLastProfile=1\n\n[Profile0]\nName=default\nIsRelative=1\nPath=default\nDefault=1\n' \\
+            printf '[General]\\nStartWithLastProfile=1\\n\\n[Profile0]\\nName=default\\nIsRelative=1\\nPath=default\\nDefault=1\\n' \\
                 > {SANDBOX_HOME}/.mozilla/firefox/profiles.ini && \\
-            printf 'user_pref("browser.shell.checkDefaultBrowser", false);\nuser_pref("browser.startup.homepage_override.mstone", "ignore");\nuser_pref("toolkit.telemetry.reportingpolicy.firstRun", false);\nuser_pref("app.update.enabled", false);\nuser_pref("browser.rights.3.shown", true);\nuser_pref("datareporting.policy.dataSubmissionEnabled", false);\nuser_pref("datareporting.policy.dataSubmissionPolicyNotified", true);\n' \\
+            printf 'user_pref("browser.shell.checkDefaultBrowser", false);\\nuser_pref("browser.startup.homepage_override.mstone", "ignore");\\nuser_pref("toolkit.telemetry.reportingpolicy.firstRun", false);\\nuser_pref("app.update.enabled", false);\\nuser_pref("browser.rights.3.shown", true);\\nuser_pref("datareporting.policy.dataSubmissionEnabled", false);\\nuser_pref("datareporting.policy.dataSubmissionPolicyNotified", true);\\n' \\
                 > "$FIREFOX_PROFILE_DIR/prefs.js" && \\
             chown -R daytona:daytona {SANDBOX_HOME}/.mozilla
 
