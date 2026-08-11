@@ -75,6 +75,19 @@ def generate_dockerfile():
         #    xclip: clipboard management
         #    xauth: X authority file management
         #    xfonts-*: font packages for proper rendering
+        #    wmctrl: window manager control — used by openBrowser() to detect
+        #            whether a browser window actually opened (wmctrl -l).
+        #            Without this the agent cannot verify the browser launched
+        #            and the entire computer-use flow aborts.
+        #    libdbus-glib-1-2: D-Bus GLib bindings — Firefox needs this at
+        #            runtime but it is not always pulled in as a hard dependency
+        #            with --no-install-recommends on minimal Debian.
+        #    libxtst6: X Test extension library — required by xdotool for
+        #            mouse/keyboard event synthesis.
+        #    libcanberra-gtk3-module: GTK3 sound module — Firefox recommends
+        #            it; without it Firefox prints warnings that can stall startup.
+        #    procps: provides ps/kill — needed for process cleanup inside the sandbox.
+        #    fonts-liberation: metric-compatible web fonts for correct rendering.
         RUN apt-get update && apt-get install -y --no-install-recommends \\
                 xvfb \\
                 xfce4 \\
@@ -91,14 +104,33 @@ def generate_dockerfile():
                 xfonts-75dpi \\
                 curl \\
                 ca-certificates \\
+                wmctrl \\
+                libdbus-glib-1-2 \\
+                libxtst6 \\
+                libcanberra-gtk3-module \\
+                procps \\
+                fonts-liberation \\
             && rm -rf /var/lib/apt/lists/*
+
+        # ── Verify no missing shared libraries for firefox-esr ──
+        RUN ldd "$(which firefox-esr)" 2>&1 | grep "not found" && exit 1 || echo "All firefox-esr deps satisfied"
 
         # ── Computer Use environment variables ──
         #    VNC_RESOLUTION: virtual desktop size (per Daytona docs).
         #    DISPLAY is managed by Daytona's computerUse.start() — do NOT
         #    hardcode it here, the agent sets it when starting Xvfb.
+        #    MOZ_DISABLE_CONTENT_SANDBOX: Firefox's content sandbox uses
+        #            seccomp/user namespaces which are not available inside
+        #            unprivileged containers. Without this env var Firefox
+        #            crashes silently on launch and no browser window appears.
+        #    MOZ_CRASHREPORTER_DISABLE: suppress crash reporter dialogs.
+        #    NO_AT_BRIDGE: disable AT-SPI accessibility bridge (can cause
+        #            startup delays in headless containers).
         ENV VNC_RESOLUTION=1280x720 \\
-            HOME={SANDBOX_HOME}
+            HOME={SANDBOX_HOME} \\
+            MOZ_DISABLE_CONTENT_SANDBOX=1 \\
+            MOZ_CRASHREPORTER_DISABLE=1 \\
+            NO_AT_BRIDGE=1
 
         # ── Ensure the daytona user's shell is bash (not zsh) ──
         RUN sed -i 's|/usr/bin/zsh|/bin/bash|g' /etc/passwd && \\
@@ -110,9 +142,23 @@ def generate_dockerfile():
             ls -la /usr/bin/zsh /bin/bash && \\
             /usr/bin/zsh --version
 
+        # ── Pre-create a Firefox profile so the first-run / import wizard ──
+        #    doesn't block the browser from opening the target URL.
+        #    The agent launches firefox with --no-remote which uses the default
+        #    profile; if none exists Firefox shows a profile-creation dialog
+        #    instead of navigating to the URL, and waitForBrowserWindow()
+        #    never detects a browser window.
+        ENV FIREFOX_PROFILE_DIR={SANDBOX_HOME}/.mozilla/firefox/default
+        RUN mkdir -p "$FIREFOX_PROFILE_DIR" && \\
+            printf '[General]\nStartWithLastProfile=1\n\n[Profile0]\nName=default\nIsRelative=1\nPath=default\nDefault=1\n' \\
+                > {SANDBOX_HOME}/.mozilla/firefox/profiles.ini && \\
+            printf 'user_pref("browser.shell.checkDefaultBrowser", false);\nuser_pref("browser.startup.homepage_override.mstone", "ignore");\nuser_pref("toolkit.telemetry.reportingpolicy.firstRun", false);\nuser_pref("app.update.enabled", false);\nuser_pref("browser.rights.3.shown", true);\nuser_pref("datareporting.policy.dataSubmissionEnabled", false);\nuser_pref("datareporting.policy.dataSubmissionPolicyNotified", true);\n' \\
+                > "$FIREFOX_PROFILE_DIR/prefs.js" && \\
+            chown -R daytona:daytona {SANDBOX_HOME}/.mozilla
+
         # ── Verify critical packages are installed ──
         RUN echo "=== Verifying Computer Use packages ===" && \\
-            for pkg in Xvfb xfce4-session x11vnc novnc firefox-esr xdotool; do \\
+            for pkg in Xvfb xfce4-session x11vnc novnc firefox-esr xdotool wmctrl; do \\
                 which "$pkg" >/dev/null 2>&1 || dpkg -l "$pkg" >/dev/null 2>&1 && echo "  ✓ $pkg" || echo "  ✗ $pkg MISSING"; \\
             done
 
