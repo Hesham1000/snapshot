@@ -171,7 +171,7 @@ def generate_dockerfile():
         RUN mkdir -p "$FIREFOX_PROFILE_DIR" && \\
             printf '[General]\\nStartWithLastProfile=1\\n\\n[Profile0]\\nName=default\\nIsRelative=1\\nPath=default\\nDefault=1\\n' \\
                 > {SANDBOX_HOME}/.mozilla/firefox/profiles.ini && \\
-            printf 'user_pref("browser.shell.checkDefaultBrowser", false);\\nuser_pref("browser.startup.homepage_override.mstone", "ignore");\\nuser_pref("toolkit.telemetry.reportingpolicy.firstRun", false);\\nuser_pref("app.update.enabled", false);\\nuser_pref("browser.rights.3.shown", true);\\nuser_pref("datareporting.policy.dataSubmissionEnabled", false);\\nuser_pref("datareporting.policy.dataSubmissionPolicyNotified", true);\\n' \\
+            printf 'user_pref("browser.shell.checkDefaultBrowser", false);\\nuser_pref("browser.startup.homepage_override.mstone", "ignore");\\nuser_pref("toolkit.telemetry.reportingpolicy.firstRun", false);\\nuser_pref("app.update.enabled", false);\\nuser_pref("browser.rights.3.shown", true);\\nuser_pref("datareporting.policy.dataSubmissionEnabled", false);\\nuser_pref("datareporting.policy.dataSubmissionPolicyNotified", true);\\nuser_pref("browser.shell.skipDefaultBrowserCheckOnFirstRun", true);\\nuser_pref("browser.shell.didSkipDefaultBrowserCheckOnFirstRun", true);\\nuser_pref("browser.feeds.showFirstRunUI", false);\\nuser_pref("browser.aboutwelcome.enabled", false);\\nuser_pref("trailhead.firstrun.didSeeAboutWelcome", true);\\nuser_pref("intl.app_locales", "en-US");\\nuser_pref("app.update.auto", false);\\nuser_pref("app.update.doorhanger", false);\\nuser_pref("app.update.silent", false);\\nuser_pref("browser.startup.homepage", "about:blank");\\nuser_pref("browser.preferences.defaultPerformanceSettings.enabled", false);\\nuser_pref("dom.disable_window_open_feature.toolbar", true);\\nuser_pref("browser.sessionstore.resume_from_crash", false);\\nuser_pref("browser.startup.page", 0);\\n' \\
                 > "$FIREFOX_PROFILE_DIR/prefs.js" && \\
             chown -R daytona:daytona {SANDBOX_HOME}/.mozilla
 
@@ -283,8 +283,8 @@ def main():
     daytona_key = os.environ.get("DAYTONA_API_KEY", "").strip()
 
     image_name = os.environ.get("IMAGE_NAME", f"{docker_user}/syntera-computer-use-sandbox").strip()
-    image_tag = os.environ.get("IMAGE_TAG", "0.1.0").strip()
-    snapshot_name = os.environ.get("SNAPSHOT_NAME", "syntera-computer-use-vcpu2-mem4-disk10").strip()
+    image_tag = os.environ.get("IMAGE_TAG", "0.2.0").strip()
+    snapshot_name = os.environ.get("SNAPSHOT_NAME", "syntera-computer-use-v3").strip()
     full_image = f"{image_name}:{image_tag}"
 
     print(f"\n📋 Configuration:")
