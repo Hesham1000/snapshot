@@ -105,12 +105,31 @@ def generate_dockerfile():
                 curl \\
                 ca-certificates \\
                 wmctrl \\
+                x11-utils \\
                 libdbus-glib-1-2 \\
                 libxtst6 \\
                 libcanberra-gtk3-module \\
                 procps \\
                 fonts-liberation \\
+                libpci3 \\
+                libgl1-mesa-dri \\
+                libegl1 \\
+                libgl1 \\
             && rm -rf /var/lib/apt/lists/*
+
+        # ── Fix /etc/machine-id for D-Bus ──
+        #    Firefox logs: "Failed to create DBus proxy for org.a11y.Bus:
+        #    Cannot spawn a message bus without a machine-id: Unable to load
+        #    /var/lib/dbus/machine-id or /etc/machine-id: Permission denied"
+        #    Without a readable machine-id, D-Bus can't start a session bus
+        #    and Firefox fails to initialize its accessibility bridge.
+        RUN dbus-uuidgen --ensure=/etc/machine-id 2>/dev/null || \\
+            (cat /proc/sys/kernel/random/uuid > /etc/machine-id) && \\
+            chmod 644 /etc/machine-id && \\
+            mkdir -p /var/lib/dbus && \\
+            dbus-uuidgen --ensure=/var/lib/dbus/machine-id 2>/dev/null || \\
+            cp /etc/machine-id /var/lib/dbus/machine-id && \\
+            chmod 644 /var/lib/dbus/machine-id
 
         # ── Verify no missing shared libraries for firefox-esr ──
         RUN ldd "$(which firefox-esr)" 2>&1 | grep "not found" && exit 1 || echo "All firefox-esr deps satisfied"
