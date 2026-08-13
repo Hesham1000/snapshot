@@ -88,6 +88,16 @@ def generate_dockerfile():
         #            it; without it Firefox prints warnings that can stall startup.
         #    procps: provides ps/kill — needed for process cleanup inside the sandbox.
         #    fonts-liberation: metric-compatible web fonts for correct rendering.
+        #    at-spi2-core: AT-SPI accessibility bus — provides at-spi-bus-launcher
+        #            and at-spi2-registryd. REQUIRED for the Daytona SDK's
+        #            accessibility.findNodes() / setNodeValue() APIs to work.
+        #            Without this, org.a11y.Bus is not provided by any .service
+        #            files and typeIntoFocusedField() can't set text in input
+        #            fields via accessibility, causing the agent to loop forever.
+        #    at-spi2-atk: ATK bridge — connects GTK/Firefox widgets to the
+        #            AT-SPI bus so accessibility nodes are actually exposed.
+        #            Without this, Firefox exposes zero accessibility nodes even
+        #            if the bus is running.
         RUN apt-get update && apt-get install -y --no-install-recommends \\
                 xvfb \\
                 xfce4 \\
@@ -115,6 +125,8 @@ def generate_dockerfile():
                 libgl1-mesa-dri \\
                 libegl1 \\
                 libgl1 \\
+                at-spi2-core \\
+                at-spi2-atk \\
             && rm -rf /var/lib/apt/lists/*
 
         # ── Fix /etc/machine-id for D-Bus ──
@@ -143,13 +155,21 @@ def generate_dockerfile():
         #            unprivileged containers. Without this env var Firefox
         #            crashes silently on launch and no browser window appears.
         #    MOZ_CRASHREPORTER_DISABLE: suppress crash reporter dialogs.
-        #    NO_AT_BRIDGE: disable AT-SPI accessibility bridge (can cause
-        #            startup delays in headless containers).
+        #    NO_AT_BRIDGE=0: explicitly ENABLE the AT-SPI accessibility bridge.
+        #            The previous value of 1 disabled it, which made
+        #            accessibility.findNodes() always fail with
+        #            "org.a11y.Bus was not provided by any .service files".
+        #            The bridge is REQUIRED for typeIntoFocusedField() Tier 0
+        #            (accessibility setNodeValue) to work — without it text
+        #            never lands in input fields and the agent loops forever.
+        #    GTK_MODULES=gail:atk-bridge: tells GTK to load the ATK bridge
+        #            module so Firefox exposes its widget tree to AT-SPI.
         ENV VNC_RESOLUTION=1280x720 \\
             HOME={SANDBOX_HOME} \\
             MOZ_DISABLE_CONTENT_SANDBOX=1 \\
             MOZ_CRASHREPORTER_DISABLE=1 \\
-            NO_AT_BRIDGE=1
+            NO_AT_BRIDGE=0 \\
+            GTK_MODULES=gail:atk-bridge
 
         # ── Ensure the daytona user's shell is bash (not zsh) ──
         RUN sed -i 's|/usr/bin/zsh|/bin/bash|g' /etc/passwd && \\
@@ -283,8 +303,8 @@ def main():
     daytona_key = os.environ.get("DAYTONA_API_KEY", "").strip()
 
     image_name = os.environ.get("IMAGE_NAME", f"{docker_user}/syntera-computer-use-sandbox").strip()
-    image_tag = os.environ.get("IMAGE_TAG", "0.2.0").strip()
-    snapshot_name = os.environ.get("SNAPSHOT_NAME", "syntera-computer-use-v3").strip()
+    image_tag = os.environ.get("IMAGE_TAG", "0.4.0").strip()
+    snapshot_name = os.environ.get("SNAPSHOT_NAME", "syntera-computer-use-v4").strip()
     full_image = f"{image_name}:{image_tag}"
 
     print(f"\n📋 Configuration:")
