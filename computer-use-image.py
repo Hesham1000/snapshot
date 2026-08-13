@@ -126,7 +126,7 @@ def generate_dockerfile():
                 libegl1 \\
                 libgl1 \\
                 at-spi2-core \\
-                at-spi2-atk \\
+                libatk-bridge2.0-0 \\
             && rm -rf /var/lib/apt/lists/*
 
         # ── Fix /etc/machine-id for D-Bus ──
