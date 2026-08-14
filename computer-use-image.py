@@ -127,6 +127,7 @@ def generate_dockerfile():
                 libgl1 \\
                 at-spi2-core \\
                 libatk-bridge2.0-0 \\
+                libatspi2.0-0 \\
             && rm -rf /var/lib/apt/lists/*
 
         # ── Fix /etc/machine-id for D-Bus ──
@@ -164,12 +165,64 @@ def generate_dockerfile():
         #            never lands in input fields and the agent loops forever.
         #    GTK_MODULES=gail:atk-bridge: tells GTK to load the ATK bridge
         #            module so Firefox exposes its widget tree to AT-SPI.
+        #    GNOME_ACCESSIBILITY=1: enables GNOME accessibility framework.
+        #    ACCESSIBILITY_ENABLED=1: generic accessibility enable flag.
         ENV VNC_RESOLUTION=1280x720 \\
             HOME={SANDBOX_HOME} \\
             MOZ_DISABLE_CONTENT_SANDBOX=1 \\
             MOZ_CRASHREPORTER_DISABLE=1 \\
             NO_AT_BRIDGE=0 \\
-            GTK_MODULES=gail:atk-bridge
+            GTK_MODULES=gail:atk-bridge \\
+            GNOME_ACCESSIBILITY=1 \\
+            ACCESSIBILITY_ENABLED=1
+
+        # ── Create startup script for D-Bus and AT-SPI ──
+        #    This ensures the accessibility bus is properly started with the
+        #    correct environment variables and socket paths.
+        RUN printf '#!/bin/bash\\n\
+        # Ensure D-Bus session bus is running\\n\
+        if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then\\n\
+            eval $(dbus-launch --sh-syntax 2>/dev/null)\\n\
+            export DBUS_SESSION_BUS_ADDRESS\\n\
+            export DBUS_SESSION_BUS_PID\\n\
+        fi\\n\
+        \\n\
+        # Ensure AT-SPI bus is started\\n\
+        if ! dbus-send --session --dest=org.a11y.Bus --type=method_call --print-reply /org/a11y/bus org.freedesktop.DBus.Peer.Ping >/dev/null 2>&1; then\\n\
+            /usr/libexec/at-spi-bus-launcher &\\n\
+            sleep 1\\n\
+        fi\\n\
+        \\n\
+        # Set accessibility environment variables\\n\
+        export NO_AT_BRIDGE=0\\n\
+        export GTK_MODULES=gail:atk-bridge\\n\
+        export GNOME_ACCESSIBILITY=1\\n\
+        export ACCESSIBILITY_ENABLED=1\\n\
+        \\n\
+        # For Firefox specifically\\n\
+        export MOZ_ENABLE_WAYLAND=0\\n\
+        export MOZ_DISABLE_CONTENT_SANDBOX=1\\n\
+        export MOZ_CRASHREPORTER_DISABLE=1\\n\
+        \\n\
+        # Start the AT-SPI registry daemon if not running\\n\
+        if ! pgrep -f at-spi2-registryd >/dev/null 2>&1; then\\n\
+            /usr/libexec/at-spi2-registryd &\\n\
+        fi\\n\
+        \\n\
+        exec "$@"\\n\
+        ' > /usr/local/bin/start-with-a11y.sh && \\
+        chmod +x /usr/local/bin/start-with-a11y.sh
+
+        # ── Configure Firefox for accessibility ──
+        #    These preferences ensure Firefox uses AT-SPI for accessibility.
+        RUN mkdir -p /etc/firefox-esr/defaults/pref && \\
+            printf '// Accessibility preferences\\n\
+        pref("accessibility.force_disabled", -1);\\n\
+        pref("accessibility.typeaheadfind", true);\\n\
+        pref("accessibility.typeaheadfind.flashBar", 0);\\n\
+        pref("accessibility.browsewithcaret", true);\\n\
+        pref("accessibility.blockautorefresh", true);\\n\
+        ' > /etc/firefox-esr/defaults/pref/a11y.js
 
         # ── Ensure the daytona user's shell is bash (not zsh) ──
         RUN sed -i 's|/usr/bin/zsh|/bin/bash|g' /etc/passwd && \\
@@ -191,18 +244,45 @@ def generate_dockerfile():
         RUN mkdir -p "$FIREFOX_PROFILE_DIR" && \\
             printf '[General]\\nStartWithLastProfile=1\\n\\n[Profile0]\\nName=default\\nIsRelative=1\\nPath=default\\nDefault=1\\n' \\
                 > {SANDBOX_HOME}/.mozilla/firefox/profiles.ini && \\
-            printf 'user_pref("browser.shell.checkDefaultBrowser", false);\\nuser_pref("browser.startup.homepage_override.mstone", "ignore");\\nuser_pref("toolkit.telemetry.reportingpolicy.firstRun", false);\\nuser_pref("app.update.enabled", false);\\nuser_pref("browser.rights.3.shown", true);\\nuser_pref("datareporting.policy.dataSubmissionEnabled", false);\\nuser_pref("datareporting.policy.dataSubmissionPolicyNotified", true);\\nuser_pref("browser.shell.skipDefaultBrowserCheckOnFirstRun", true);\\nuser_pref("browser.shell.didSkipDefaultBrowserCheckOnFirstRun", true);\\nuser_pref("browser.feeds.showFirstRunUI", false);\\nuser_pref("browser.aboutwelcome.enabled", false);\\nuser_pref("trailhead.firstrun.didSeeAboutWelcome", true);\\nuser_pref("intl.app_locales", "en-US");\\nuser_pref("app.update.auto", false);\\nuser_pref("app.update.doorhanger", false);\\nuser_pref("app.update.silent", false);\\nuser_pref("browser.startup.homepage", "about:blank");\\nuser_pref("browser.preferences.defaultPerformanceSettings.enabled", false);\\nuser_pref("dom.disable_window_open_feature.toolbar", true);\\nuser_pref("browser.sessionstore.resume_from_crash", false);\\nuser_pref("browser.startup.page", 0);\\n' \\
+            printf 'user_pref("browser.shell.checkDefaultBrowser", false);\\nuser_pref("browser.startup.homepage_override.mstone", "ignore");\\nuser_pref("toolkit.telemetry.reportingpolicy.firstRun", false);\\nuser_pref("app.update.enabled", false);\\nuser_pref("browser.rights.3.shown", true);\\nuser_pref("datareporting.policy.dataSubmissionEnabled", false);\\nuser_pref("datareporting.policy.dataSubmissionPolicyNotified", true);\\nuser_pref("browser.shell.skipDefaultBrowserCheckOnFirstRun", true);\\nuser_pref("browser.shell.didSkipDefaultBrowserCheckOnFirstRun", true);\\nuser_pref("browser.feeds.showFirstRunUI", false);\\nuser_pref("browser.aboutwelcome.enabled", false);\\nuser_pref("trailhead.firstrun.didSeeAboutWelcome", true);\\nuser_pref("intl.app_locales", "en-US");\\nuser_pref("app.update.auto", false);\\nuser_pref("app.update.doorhanger", false);\\nuser_pref("app.update.silent", false);\\nuser_pref("browser.startup.homepage", "about:blank");\\nuser_pref("browser.preferences.defaultPerformanceSettings.enabled", false);\\nuser_pref("dom.disable_window_open_feature.toolbar", true);\\nuser_pref("browser.sessionstore.resume_from_crash", false);\\nuser_pref("browser.startup.page", 0);\\nuser_pref("accessibility.force_disabled", -1);\\nuser_pref("accessibility.typeaheadfind", true);\\n' \\
                 > "$FIREFOX_PROFILE_DIR/prefs.js" && \\
             chown -R daytona:daytona {SANDBOX_HOME}/.mozilla
 
+        # ── Create a wrapper script for Firefox that sources D-Bus env ──
+        RUN printf '#!/bin/bash\\n\
+        # Source D-Bus environment if it exists\\n\
+        if [ -f /tmp/computer-use-dbus-env ]; then\\n\
+            source /tmp/computer-use-dbus-env 2>/dev/null\\n\
+        fi\\n\
+        \\n\
+        # Ensure accessibility environment variables are set\\n\
+        export NO_AT_BRIDGE=0\\n\
+        export GTK_MODULES=gail:atk-bridge\\n\
+        export GNOME_ACCESSIBILITY=1\\n\
+        export ACCESSIBILITY_ENABLED=1\\n\
+        export MOZ_DISABLE_CONTENT_SANDBOX=1\\n\
+        export MOZ_CRASHREPORTER_DISABLE=1\\n\
+        \\n\
+        # Launch Firefox with the provided arguments\\n\
+        exec /usr/bin/firefox-esr "$@"\\n\
+        ' > /usr/local/bin/firefox-esr-wrapper && \\
+        chmod +x /usr/local/bin/firefox-esr-wrapper && \\
+        ln -sf /usr/local/bin/firefox-esr-wrapper /usr/local/bin/firefox
+
         # ── Verify critical packages are installed ──
         RUN echo "=== Verifying Computer Use packages ===" && \\
-            for pkg in Xvfb xfce4-session x11vnc novnc firefox-esr xdotool wmctrl; do \\
+            for pkg in Xvfb xfce4-session x11vnc novnc firefox-esr xdotool wmctrl at-spi-bus-launcher at-spi2-registryd; do \\
                 which "$pkg" >/dev/null 2>&1 || dpkg -l "$pkg" >/dev/null 2>&1 && echo "  ✓ $pkg" || echo "  ✗ $pkg MISSING"; \\
-            done
+            done && \\
+            echo "=== Verifying accessibility libraries ===" && \\
+            ldconfig -p | grep -E "atk-bridge|atspi|dbus" | head -20
 
         USER daytona
         WORKDIR {SANDBOX_HOME}
+
+        # ── Entrypoint to ensure accessibility is set up ──
+        ENTRYPOINT ["/usr/local/bin/start-with-a11y.sh"]
+        CMD ["/bin/bash"]
     """)
 
     (BUILD_DIR / "Dockerfile").write_text(dockerfile, encoding="utf-8")
@@ -303,8 +383,8 @@ def main():
     daytona_key = os.environ.get("DAYTONA_API_KEY", "").strip()
 
     image_name = os.environ.get("IMAGE_NAME", f"{docker_user}/syntera-computer-use-sandbox").strip()
-    image_tag = os.environ.get("IMAGE_TAG", "0.4.0").strip()
-    snapshot_name = os.environ.get("SNAPSHOT_NAME", "syntera-computer-use-v4").strip()
+    image_tag = os.environ.get("IMAGE_TAG", "0.5.0").strip()
+    snapshot_name = os.environ.get("SNAPSHOT_NAME", "syntera-computer-use-v5").strip()
     full_image = f"{image_name}:{image_tag}"
 
     print(f"\n📋 Configuration:")
