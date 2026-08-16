@@ -343,10 +343,18 @@ def create_daytona_snapshot(api_key: str, snapshot_name: str, full_image: str):
     try:
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "daytona-sdk"], check=True)
 
-        os.environ["DAYTONA_API_KEY"] = api_key
-        from daytona import Daytona, CreateSnapshotParams, Resources
+        from daytona import Daytona, DaytonaConfig, CreateSnapshotParams, Resources
 
-        daytona = Daytona()
+        # Without an explicit api_url, Daytona() falls back to the public
+        # https://app.daytona.io/api — not this org's private deployment.
+        # The API key is scoped to syntera-happybox.obelion.ai, so an
+        # unqualified Daytona() would either fail to authenticate or (worse)
+        # silently create the snapshot on the wrong Daytona instance.
+        daytona = Daytona(DaytonaConfig(
+            api_key=api_key,
+            api_url="https://syntera-happybox.obelion.ai/api",
+            target="us",
+        ))
         snapshot = daytona.snapshot.create(
             CreateSnapshotParams(
                 name=snapshot_name,
@@ -383,8 +391,8 @@ def main():
     daytona_key = os.environ.get("DAYTONA_API_KEY", "").strip()
 
     image_name = os.environ.get("IMAGE_NAME", f"{docker_user}/syntera-computer-use-sandbox").strip()
-    image_tag = os.environ.get("IMAGE_TAG", "0.5.0").strip()
-    snapshot_name = os.environ.get("SNAPSHOT_NAME", "syntera-computer-use-v5").strip()
+    image_tag = os.environ.get("IMAGE_TAG", "0.6.0").strip()
+    snapshot_name = os.environ.get("SNAPSHOT_NAME", "syntera-computer-use-v6").strip()
     full_image = f"{image_name}:{image_tag}"
 
     print(f"\n📋 Configuration:")
