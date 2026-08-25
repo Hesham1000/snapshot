@@ -28,8 +28,16 @@ the full desktop environment stack required by Daytona Computer Use:
   - XFCE4 (lightweight desktop)
   - x11vnc (VNC server)
   - novnc (web-based VNC client)
-  - Firefox ESR (browser for web interaction)
+  - Firefox ESR (browser for the accessibility-driven computer-use-agent flow)
+  - Chromium (browser for the visual-critique screenshot flow — see below)
   - xdotool, xclip (GUI automation helpers)
+
+v3 / 0.3.0 note: v2 fixed the 503 ("Computer-use functionality is not
+available") but `screenshot-capture.ts`'s captureViaDaytona() then logged
+"No browser found inside the sandbox for computer-use capture" and fell back
+to Puppeteer — it only looks for a Chromium/Chrome binary, and v2 only
+installed Firefox. v3 adds `chromium` to the package list so that check
+succeeds and captureViaDaytona() actually runs instead of falling back.
 
 Usage (on GitHub Codespaces or any Linux machine with Docker):
     export DOCKER_USERNAME=yourusername
@@ -39,15 +47,17 @@ Usage (on GitHub Codespaces or any Linux machine with Docker):
 
 Or run directly and you'll be prompted for any missing env vars.
 
-IMPORTANT: this creates a NEW snapshot ("<old name>-v2") alongside the
-existing `open-swe-vcpu1-mem2-disk7` snapshot — it does NOT touch or delete
-the old one. Once you've verified sandboxes built from the new snapshot work
-(dev server boots AND computer-use starts), manually:
-  1. Delete the old `open-swe-vcpu1-mem2-disk7` snapshot in the Daytona
-     dashboard (or via the SDK).
+IMPORTANT: this creates a NEW snapshot ("<old name>-v3") alongside the
+existing `open-swe-vcpu1-mem2-disk7` and `open-swe-vcpu1-mem2-disk7-v2`
+snapshots — it does NOT touch or delete either. Once you've verified
+sandboxes built from the new snapshot work (dev server boots, computer-use
+starts, AND captureViaDaytona() finds chromium instead of falling back),
+manually:
+  1. Delete the older `open-swe-vcpu1-mem2-disk7` / `-v2` snapshots in the
+     Daytona dashboard (or via the SDK).
   2. `packages/shared/src/constants.ts` has already been updated to point at
      it:
-       DAYTONA_SNAPSHOT_NAME = process.env.DAYTONA_SNAPSHOT_NAME || "open-swe-vcpu1-mem2-disk7-v2"
+       DAYTONA_SNAPSHOT_NAME = process.env.DAYTONA_SNAPSHOT_NAME || "open-swe-vcpu1-mem2-disk7-v3"
 """
 
 import os
@@ -68,9 +78,9 @@ SANDBOX_HOME = "/home/daytona"
 
 BUILD_DIR = Path("/tmp/syntera-nextjs-computer-use-sandbox-build")
 
-# Name of the snapshot this replaces, once verified — old name + "-v2".
+# Name of the snapshot this replaces, once verified — old name + "-v3".
 OLD_SNAPSHOT_NAME = "open-swe-vcpu1-mem2-disk7"
-NEW_SNAPSHOT_NAME_DEFAULT = f"{OLD_SNAPSHOT_NAME}-v2"
+NEW_SNAPSHOT_NAME_DEFAULT = f"{OLD_SNAPSHOT_NAME}-v3"
 
 
 def get_env(key: str, prompt: str = None) -> str:
@@ -135,6 +145,15 @@ def generate_dockerfile():
         #            AT-SPI bus so accessibility nodes are actually exposed.
         #            Without this, Firefox exposes zero accessibility nodes even
         #            if the bus is running.
+        #    chromium: screenshot-capture.ts's captureViaDaytona() only looks for
+        #            a Chromium/Chrome binary (chromium, chromium-browser,
+        #            google-chrome, google-chrome-stable) — Firefox has no
+        #            equivalent to Chromium's `--app=` chromeless-window flag,
+        #            so without this the visual-critique screenshot path finds
+        #            no browser and always falls back to Puppeteer, even though
+        #            computer-use itself started fine. Firefox stays installed
+        #            for the separate accessibility-driven computer-use-agent
+        #            flow, which does depend on it.
         RUN apt-get update && apt-get install -y --no-install-recommends \\
                 xvfb \\
                 xfce4 \\
@@ -142,6 +161,7 @@ def generate_dockerfile():
                 x11vnc \\
                 novnc \\
                 firefox-esr \\
+                chromium \\
                 dbus-x11 \\
                 xdotool \\
                 xclip \\
@@ -181,8 +201,9 @@ def generate_dockerfile():
             cp /etc/machine-id /var/lib/dbus/machine-id && \\
             chmod 644 /var/lib/dbus/machine-id
 
-        # ── Verify no missing shared libraries for firefox-esr ──
+        # ── Verify no missing shared libraries for firefox-esr and chromium ──
         RUN ldd "$(which firefox-esr)" 2>&1 | grep "not found" && exit 1 || echo "All firefox-esr deps satisfied"
+        RUN ldd "$(which chromium)" 2>&1 | grep "not found" && exit 1 || echo "All chromium deps satisfied"
 
         # ── Computer Use environment variables ──
         #    VNC_RESOLUTION: virtual desktop size (per Daytona docs).
@@ -308,7 +329,7 @@ def generate_dockerfile():
 
         # ── Verify critical packages are installed ──
         RUN echo "=== Verifying Computer Use packages ===" && \\
-            for pkg in Xvfb xfce4-session x11vnc novnc firefox-esr xdotool wmctrl at-spi-bus-launcher at-spi2-registryd; do \\
+            for pkg in Xvfb xfce4-session x11vnc novnc firefox-esr chromium xdotool wmctrl at-spi-bus-launcher at-spi2-registryd; do \\
                 which "$pkg" >/dev/null 2>&1 || dpkg -l "$pkg" >/dev/null 2>&1 && echo "  ✓ $pkg" || echo "  ✗ $pkg MISSING"; \\
             done && \\
             echo "=== Verifying accessibility libraries ===" && \\
@@ -439,7 +460,7 @@ def main():
     daytona_key = os.environ.get("DAYTONA_API_KEY", "").strip()
 
     image_name = os.environ.get("IMAGE_NAME", f"{docker_user}/syntera-nextjs-computer-use-sandbox").strip()
-    image_tag = os.environ.get("IMAGE_TAG", "0.2.0").strip()
+    image_tag = os.environ.get("IMAGE_TAG", "0.3.0").strip()
     snapshot_name = os.environ.get("SNAPSHOT_NAME", NEW_SNAPSHOT_NAME_DEFAULT).strip()
     full_image = f"{image_name}:{image_tag}"
 
